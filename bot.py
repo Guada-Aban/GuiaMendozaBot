@@ -1,10 +1,11 @@
 import os
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 
-from ia_client import responder_con_ia
+from ia_client import responder_con_ia, consultar_clima, consultar_pronostico
 
 # Cargo el token
 load_dotenv()
@@ -13,19 +14,29 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 # --- FUNCIONES DE COMANDOS ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Creamos los botones que aparecerán DENTRO del mensaje
+    keyboard = [
+        [
+            InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
+            InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
+        ],
+        [
+            InlineKeyboardButton("☀️ Clima", callback_data="clima"),
+            InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
+        ],
+        [
+            InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     msg = (
-        "👋 ¡Hola! Soy *Pandito*, tu asistente de viajes inteligente 🇦🇷\n\n"
-        "Puedo recomendarte lugares, comidas típicas o decirte el clima actual.\n"
-        "Usá alguno de estos comandos:\n"
-        "🏔 /lugares - lugares turísticos\n"
-        "🍷 /comidas - comidas y restaurantes\n"
-        "☀️ /clima - clima actual\n"
-        "🤖 /preguntar - hacer una consulta con IA\n"
-        "ℹ️ /ayuda - más información"
+        "👋 ¡Hola! Soy *Pandito*, tu guía virtual de Mendoza. 🐼\n\n"
+        "Elegí una opción para comenzar:"
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
 
-
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Podés preguntarme cosas como:\n"
@@ -99,9 +110,85 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- FUNCIÓN PARA RESPONDER MENSAJES DE TEXTO ---
 async def responder_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pregunta = update.message.text
-    respuesta = responder_con_ia(pregunta)
+    pregunta = update.message.text.lower()
+    
+    # Palabras clave para clima actual
+    palabras_clima = [
+        "tiempo", "frio", "calor", "lluvia", "nieve",
+        "clima", "soleado", "nuboso", "temperatura", "hoy"
+    ]
+    
+    # Palabras clave para pronóstico (a futuro)
+    palabras_pronostico = [
+        "pronóstico", "previsión", "mañana", "tarde", "noche",
+        "tormenta", "semana", "fin de semana", "va a llover", "lloverá"
+    ]
+    
+    # Si el mensaje se relaciona con el pronóstico
+    if any(palabra in pregunta for palabra in palabras_pronostico):
+        respuesta = consultar_pronostico()
+    
+    # Si el mensaje se relaciona con el clima actual
+    elif any(palabra in pregunta for palabra in palabras_clima):
+        respuesta = consultar_clima()
+    
+    # Si no, pasa a la IA
+    else:
+        respuesta = responder_con_ia(pregunta)
+    
     await update.message.reply_text(respuesta)
+    
+    
+#manejo de botones
+# --- FUNCIÓN PARA MANEJAR LOS BOTONES INLINE ---
+async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()  # Confirma que se tocó el botón
+
+    data = query.data
+
+    if data == "lugares":
+        await query.message.reply_text(
+            "🏞️ Algunos lugares imperdibles en Mendoza:\n"
+            "- Parque General San Martín\n"
+            "- Cerro de la Gloria\n"
+            "- Bodegas en Maipú y Luján de Cuyo\n"
+            "- Alta Montaña y Puente del Inca\n"
+            "- Embalse Potrerillos"
+        )
+
+    elif data == "comidas":
+        await query.message.reply_text(
+            "🍷 Comidas típicas mendocinas:\n"
+            "- Asado con vino local 🍖\n"
+            "- Empanadas mendocinas 🥟\n"
+            "- Locro y humita\n"
+            "- Dulce de membrillo y tortitas"
+        )
+
+    elif data == "clima":
+        respuesta = consultar_clima()
+        await query.message.reply_text(respuesta)
+
+    elif data == "pronostico":
+        respuesta = consultar_pronostico()
+        await query.message.reply_text(respuesta)
+
+    elif data == "ayuda":
+        await query.message.reply_text(
+            "Podés pedirme cosas como:\n"
+            "- Qué lugares visitar en Mendoza\n"
+            "- Qué comer típico\n"
+            "- Cómo está el clima hoy\n"
+            "- Qué bodegas visitar 🍇"
+        )
+
+    else:
+        # Si se presiona algo no reconocido, responde con un mensaje por defecto
+        await query.message.reply_text("Opción no reconocida, probá otra 🙂")
+
+    
+    
 
 
 # --- CONFIGURACIÓN DEL BOT ---
@@ -115,6 +202,8 @@ def main():
     app.add_handler(CommandHandler("comidas", comidas))
     app.add_handler(CommandHandler("clima", clima))
     app.add_handler(CommandHandler("preguntar", preguntar))
+    app.add_handler(CallbackQueryHandler(manejar_botones))
+
 
     # Mensajes sin comando → IA
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder_texto))

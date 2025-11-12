@@ -37,6 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+    
 async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Podés preguntarme cosas como:\n"
@@ -45,6 +46,8 @@ async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "- Cómo está el clima hoy\n"
         "- Qué puedo hacer en Mendoza un fin de semana"
     )
+    await mostrar_menu_rapido(update)
+
 
 
 async def lugares(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -56,6 +59,9 @@ async def lugares(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "- Alta Montaña y Puente del Inca\n"
         "- Embalse Potrerillos"
     )
+    
+    await mostrar_menu_rapido(update)
+
 
 
 async def comidas(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,6 +72,9 @@ async def comidas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "- Locro y humita\n"
         "- Dulce de membrillo y tortitas"
     )
+    
+    await mostrar_menu_rapido(update)
+
 
 
 async def clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -93,6 +102,9 @@ async def clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mensaje = f"Error al consultar el clima: {e}"
 
     await update.message.reply_text(mensaje)
+    
+    await mostrar_menu_rapido(update)
+
 
 
 async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -107,11 +119,13 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-
-# --- FUNCIÓN PARA RESPONDER MENSAJES DE TEXTO ---
+#funcion para responder texto 
 async def responder_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pregunta = update.message.text.lower()
-    
+    pregunta = update.message.text.lower().strip()
+
+    # Palabras clave para volver al menú principal
+    palabras_menu = ["menu", "menú", "inicio", "volver", "empezar", "principal"]
+
     # Palabras clave para clima actual
     palabras_clima = [
         "tiempo", "frio", "calor", "lluvia", "nieve",
@@ -123,23 +137,49 @@ async def responder_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pronóstico", "previsión", "mañana", "tarde", "noche",
         "tormenta", "semana", "fin de semana", "va a llover", "lloverá"
     ]
-    
-    # Si el mensaje se relaciona con el pronóstico
+
+    # --- Si el usuario pide volver al menú ---
+    if any(palabra in pregunta for palabra in palabras_menu):
+        keyboard = [
+            [
+                InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
+                InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
+            ],
+            [
+                InlineKeyboardButton("☀️ Clima", callback_data="clima"),
+                InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
+            ],
+            [
+                InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        msg = (
+            "🏠 Volviste al *menú principal*.\n\n"
+            "Elegí una opción para continuar:"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+        return  # corta la función acá
+
+    # --- Si pregunta por el pronóstico ---
     if any(palabra in pregunta for palabra in palabras_pronostico):
         respuesta = consultar_pronostico()
-    
-    # Si el mensaje se relaciona con el clima actual
+
+    # --- Si pregunta por el clima actual ---
     elif any(palabra in pregunta for palabra in palabras_clima):
         respuesta = consultar_clima()
-    
-    # Si no, pasa a la IA
+
+    # --- Si no coincide con nada, responde la IA ---
     else:
         respuesta = responder_con_ia(pregunta)
-    
+
     await update.message.reply_text(respuesta)
     
+    await mostrar_menu_rapido(update)
+
     
-#manejo de botones
+    
 # --- FUNCIÓN PARA MANEJAR LOS BOTONES INLINE ---
 async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -183,12 +223,39 @@ async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "- Qué bodegas visitar 🍇"
         )
 
+    # 👇 NUEVO BLOQUE: cuando se toca el botón “Volver al menú”
+    elif data == "menu_principal":
+        keyboard = [
+            [
+                InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
+                InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
+            ],
+            [
+                InlineKeyboardButton("☀️ Clima", callback_data="clima"),
+                InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
+            ],
+            [
+                InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.message.reply_text(
+            "🏠 Estás de nuevo en el *menú principal*. Elegí una opción:",
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
+
     else:
-        # Si se presiona algo no reconocido, responde con un mensaje por defecto
         await query.message.reply_text("Opción no reconocida, probá otra 🙂")
 
-    
-    
+
+async def mostrar_menu_rapido(update: Update):
+    keyboard = [
+        [InlineKeyboardButton("🏠 Volver al menú", callback_data="menu_principal")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("¿Te puedo ayudar con algo más? 🤔", reply_markup=reply_markup)
+
 
 
 # --- CONFIGURACIÓN DEL BOT ---
@@ -203,6 +270,8 @@ def main():
     app.add_handler(CommandHandler("clima", clima))
     app.add_handler(CommandHandler("preguntar", preguntar))
     app.add_handler(CallbackQueryHandler(manejar_botones))
+    app.add_handler(CallbackQueryHandler(manejar_botones))
+
 
 
     # Mensajes sin comando → IA

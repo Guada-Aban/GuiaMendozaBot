@@ -122,6 +122,10 @@ async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #funcion para responder texto 
 async def responder_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pregunta = update.message.text.lower().strip()
+    
+    
+    #saludos que activan el menu principal
+    saludos = ["hola", "buenas", "buen día", "buenas tardes", "buenas noches", "qué tal", "hey", "hi"]
 
     # Palabras clave para volver al menú principal
     palabras_menu = ["menu", "menú", "inicio", "volver", "empezar", "principal"]
@@ -137,6 +141,34 @@ async def responder_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pronóstico", "previsión", "mañana", "tarde", "noche",
         "tormenta", "semana", "fin de semana", "va a llover", "lloverá"
     ]
+    
+    
+    if any(s in pregunta for s in saludos):
+        # Mostrar menú principal
+        keyboard = [
+            [
+                InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
+                InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
+            ],
+            [
+                InlineKeyboardButton("☀️ Clima", callback_data="clima"),
+                InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
+            ],
+            [
+                InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        saludo_texto = (
+            "¡Hola! 👋 Soy Pandito, tu guía en Mendoza.\n"
+            "¿Qué te gustaría descubrir hoy? 😊"
+        )
+
+        await update.message.reply_text(saludo_texto, reply_markup=reply_markup)
+        return  # 👈 MUY IMPORTANTE: detiene la función aquí
+    
+    
 
     # --- Si el usuario pide volver al menú ---
     if any(palabra in pregunta for palabra in palabras_menu):

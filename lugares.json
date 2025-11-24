@@ -1,0 +1,181 @@
+{
+  "parque san martin": {
+    "nombre": "Parque General San Martín",
+    "descripcion": "El parque urbano más grande y emblemático de Mendoza, ideal para paseos, actividades deportivas y disfrutar del lago.",
+    "como_llegar": "https://www.google.com/maps?q=Parque+General+San+Martín+Mendoza",
+    "horarios": "Abierto 24 horas",
+    "actividades": ["Caminatas", "Running", "Paseos en familia", "Lago", "Cerro de la Gloria"],
+    "categoria": "naturaleza"
+  },
+
+  "cerro de la gloria": {
+    "nombre": "Cerro de la Gloria",
+    "descripcion": "Mirador icónico con el monumento al Ejército de los Andes y vistas panorámicas de la ciudad.",
+    "como_llegar": "https://www.google.com/maps?q=Cerro+de+la+Gloria+Mendoza",
+    "horarios": "8:00 a 20:00",
+    "actividades": ["Miradores", "Fotos", "Historia"],
+    "categoria": "naturaleza"
+  },
+
+  "divisadero largo": {
+    "nombre": "Reserva Natural Divisadero Largo",
+    "descripcion": "Reserva geológica con senderos, fósiles y formaciones naturales únicas.",
+    "como_llegar": "https://www.google.com/maps?q=Reserva+Divisadero+Largo",
+    "horarios": "9:00 a 18:00",
+    "actividades": ["Trekking", "Fotografía", "Senderismo"],
+    "categoria": "naturaleza"
+  },
+
+  "potrerillos": {
+    "nombre": "Dique Potrerillos",
+    "descripcion": "Un lago artificial rodeado de montañas, perfecto para deportes y descansar.",
+    "como_llegar": "https://www.google.com/maps?q=Potrerillos+Mendoza",
+    "horarios": "Abierto 24 horas",
+    "actividades": ["Rafting", "Kayak", "Trekking", "Picnic"],
+    "categoria": "montana"
+  },
+
+  "puente del inca": {
+    "nombre": "Puente del Inca",
+    "descripcion": "Formación natural de origen mineral junto a un pueblo histórico en la alta montaña.",
+    "como_llegar": "https://www.google.com/maps?q=Puente+del+Inca",
+    "horarios": "Abierto 24 horas",
+    "actividades": ["Fotos", "Historia", "Montaña"],
+    "categoria": "montana"
+  },
+
+  "aconcagua": {
+    "nombre": "Parque Aconcagua",
+    "descripcion": "Parque natural donde se encuentra el cerro Aconcagua, el más alto de América.",
+    "como_llegar": "https://www.google.com/maps?q=Parque+Provincial+Aconcagua",
+    "horarios": "9:00 a 18:00",
+    "actividades": ["Senderismo", "Fotos", "Alta montaña"],
+    "categoria": "montana"
+  },
+
+  "uspallata": {
+    "nombre": "Uspallata",
+    "descripcion": "Pueblo de montaña rodeado de paisajes increíbles y actividades al aire libre.",
+    "como_llegar": "https://www.google.com/maps?q=Uspallata+Mendoza",
+    "horarios": "Abierto 24 horas",
+    "actividades": ["Trekking", "MTB", "Cabalgatas"],
+    "categoria": "montana"
+  },
+
+  "chacras de coria": {
+    "nombre": "Chacras de Coria",
+    "descripcion": "Zona residencial y turística con gastronomía, naturaleza y bodegas cercanas.",
+    "como_llegar": "https://www.google.com/maps?q=Chacras+de+Coria",
+    "horarios": "Abierto 24 horas",
+    "actividades": ["Gastronomía", "Paseos", "Vinos"],
+    "categoria": "naturaleza"
+  },
+
+  "bodega catena zapata": {
+    "nombre": "Bodega Catena Zapata",
+    "descripcion": "Una de las bodegas más prestigiosas del mundo, conocida por su arquitectura piramidal.",
+    "como_llegar": "https://www.google.com/maps?q=Catena+Zapata",
+    "horarios": "10:00 a 17:00",
+    "actividades": ["Degustación", "Tours guiados", "Gastronomía"],
+    "categoria": "bodegas"
+  },
+
+  "bodega zuccardi": {
+    "nombre": "Bodega Zuccardi",
+    "descripcion": "Premiada como una de las mejores bodegas del mundo, ubicada en Valle de Uco.",
+    "como_llegar": "https://www.google.com/maps?q=Zuccardi",
+    "horarios": "10:00 a 18:00",
+    "actividades": ["Degustación", "Visita guiada", "Restaurante"],
+    "categoria": "bodegas"
+  },
+
+  "bodega trapiche": {
+    "nombre": "Bodega Trapiche",
+    "descripcion": "Histórica bodega mendocina con arquitectura antigua y vinos premiados.",
+    "como_llegar": "https://www.google.com/maps?q=Bodega+Trapiche",
+    "horarios": "10:00 a 17:00",
+    "actividades": ["Degustación", "Visitas", "Fotos"],
+    "categoria": "bodegas"
+  },
+
+  "bodega septima": {
+    "nombre": "Bodega Séptima",
+    "descripcion": "Bodega moderna con vistas a la montaña y experiencias enoturísticas.",
+    "como_llegar": "https://www.google.com/maps?q=Bodega+Séptima",
+    "horarios": "10:00 a 18:00",
+    "actividades": ["Degustación", "Comida", "Terraza"],
+    "categoria": "bodegas"
+  },
+
+  "palmares": {
+    "nombre": "Palmares Open Mall",
+    "descripcion": "Centro comercial al aire libre con tiendas, restaurantes y cines.",
+    "como_llegar": "https://www.google.com/maps?q=Palmares+Open+Mall",
+    "horarios": "10:00 a 22:00",
+    "actividades": ["Compras", "Comida", "Cine"],
+    "categoria": "compras"
+  },
+
+  "mendoza plaza shopping": {
+    "nombre": "Mendoza Plaza Shopping",
+    "descripcion": "El shopping más grande de Mendoza, con tiendas, patio de comidas y cine.",
+    "como_llegar": "https://www.google.com/maps?q=Mendoza+Plaza+Shopping",
+    "horarios": "10:00 a 22:00",
+    "actividades": ["Compras", "Gastronomía", "Entretenimiento"],
+    "categoria": "compras"
+  },
+
+  "paseo aristides": {
+    "nombre": "Paseo Arístides",
+    "descripcion": "La calle gastronómica más popular de Mendoza con bares y restaurantes.",
+    "como_llegar": "https://www.google.com/maps?q=Aristides+Villanueva",
+    "horarios": "Abierto 24 horas",
+    "actividades": ["Bares", "Restaurantes", "Vida nocturna"],
+    "categoria": "compras"
+  },
+
+  "museo del area fundacional": {
+    "nombre": "Museo del Área Fundacional",
+    "descripcion": "Sitio histórico sobre la fundación de Mendoza y restos arqueológicos.",
+    "como_llegar": "https://www.google.com/maps?q=Museo+Área+Fundacional",
+    "horarios": "9:00 a 19:00",
+    "actividades": ["Historia", "Museo", "Arqueología"],
+    "categoria": "cultura"
+  },
+
+  "teatro independencia": {
+    "nombre": "Teatro Independencia",
+    "descripcion": "Principal teatro de la provincia, con obras, conciertos y ballet.",
+    "como_llegar": "https://www.google.com/maps?q=Teatro+Independencia",
+    "horarios": "Según funciones",
+    "actividades": ["Teatro", "Shows", "Cultura"],
+    "categoria": "cultura"
+  },
+
+  "ruinas de san francisco": {
+    "nombre": "Ruinas de San Francisco",
+    "descripcion": "Restos del antiguo templo destruido por el terremoto de 1861.",
+    "como_llegar": "https://www.google.com/maps?q=Ruinas+de+San+Francisco+Mendoza",
+    "horarios": "8:00 a 20:00",
+    "actividades": ["Historia", "Fotos", "Tour"],
+    "categoria": "cultura"
+  },
+
+  "cerro arco": {
+    "nombre": "Cerro Arco",
+    "descripcion": "Uno de los cerros más visitados para trekking y parapente, con vistas increíbles.",
+    "como_llegar": "https://www.google.com/maps?q=Cerro+Arco",
+    "horarios": "7:00 a 19:00",
+    "actividades": ["Trekking", "Parapente", "Fotos"],
+    "categoria": "aventura"
+  },
+
+  "rafting potrerillos": {
+    "nombre": "Rafting en Potrerillos",
+    "descripcion": "Uno de los mejores lugares de Argentina para hacer rafting en aguas rápidas.",
+    "como_llegar": "https://www.google.com/maps?q=Rafting+Potrerillos",
+    "horarios": "10:00 a 18:00",
+    "actividades": ["Rafting", "Kayak", "Aventura"],
+    "categoria": "aventura"
+  }
+}

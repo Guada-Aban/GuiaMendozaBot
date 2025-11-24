@@ -1,24 +1,102 @@
+# bot.py
 import os
+import json
+import difflib
 from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+    CallbackQueryHandler
+)
 import requests
+from telegram.error import BadRequest
 
-from ia_client import responder_con_ia, consultar_clima, consultar_pronostico
+# funciones IA y clima/progn vienen de archivos auxiliares
+from ia_client import responder_con_ia, enriquecer_con_ia # noqa: F401
 
-# Cargo el token
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+WEATHER_KEY = os.getenv("WEATHER_API_KEY")
 
-# --- FUNCIONES DE COMANDOS ---
+# Cargar JSON de lugares
+DATA_FILE = "lugares.json"
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        LUGARES_DATA = json.load(f)
+else:
+    LUGARES_DATA = {}
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Creamos los botones que aparecerán DENTRO del mensaje
+# --- UTIL: buscar lugar en JSON (coincidencia parcial y fuzzy) ---
+def buscar_lugar_en_json(texto: str):
+    texto = texto.lower().strip()
+    # búsqueda directa por clave
+    for clave, info in LUGARES_DATA.items():
+        if clave in texto or info.get("nombre", "").lower() in texto:
+            return clave, info
+    # fuzzy: buscar coincidencias cercanas en keys y nombres
+    claves = list(LUGARES_DATA.keys())
+    matches = difflib.get_close_matches(texto, claves, n=1, cutoff=0.6)
+    if matches:
+        return matches[0], LUGARES_DATA[matches[0]]
+    # buscar por palabras contiguas (ej: "parque san martin")
+    for clave in claves:
+        if all(pal in texto for pal in clave.split()):
+            return clave, LUGARES_DATA[clave]
+    return None, None
+
+# --- FUNCIONES DE CLIMA/PRONÓSTICO (si las querías inline en bot.py) ---
+def consultar_clima():
+    if not WEATHER_KEY:
+        return "Servicio de clima no configurado."
+    ciudad = "Mendoza,AR"
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={ciudad}&appid={WEATHER_KEY}&units=metric&lang=es"
+    try:
+        r = requests.get(url, timeout=8)
+        data = r.json()
+        if data.get("cod") == 200:
+            temp = data["main"]["temp"]
+            desc = data["weather"][0]["description"].capitalize()
+            humedad = data["main"].get("humidity")
+            viento = data["wind"].get("speed")
+            return f"🌤️ Clima actual en Mendoza:\nTemperatura: {temp}°C\nDescripción: {desc}\nHumedad: {humedad}%\nViento: {viento} m/s"
+        else:
+            return "No pude obtener el clima actual 😕"
+    except Exception as e:
+        return f"Error al consultar el clima: {e}"
+
+def consultar_pronostico():
+    if not WEATHER_KEY:
+        return "Servicio de pronóstico no configurado."
+    lat, lon = -32.889, -68.845
+    url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={WEATHER_KEY}&units=metric&lang=es"
+    try:
+        r = requests.get(url, timeout=8)
+        data = r.json()
+        lst = data.get("list", [])[:8]
+        if not lst:
+            return "No pude obtener el pronóstico."
+        temps = [it["main"]["temp"] for it in lst]
+        min_t, max_t = min(temps), max(temps)
+        pop = max([it.get("pop", 0) for it in lst]) * 100
+        desc = lst[0]["weather"][0]["description"].capitalize()
+        return (
+            f"📅 Pronóstico para hoy en Mendoza:\n"
+            f"🌡️ Mínima: {min_t:.1f}°C | Máxima: {max_t:.1f}°C\n"
+            f"🌧️ Probabilidad de lluvia: {pop:.0f}%\n"
+            f"☀️ Cielo: {desc}"
+        )
+    except Exception as e:
+        return f"Error al consultar el pronóstico: {e}"
+
+# --- MENÚ y helpers ---
+def build_main_menu():
     keyboard = [
         [
-            InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
-            InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
+            InlineKeyboardButton("🏔 Lugares", callback_data="lugares")
         ],
         [
             InlineKeyboardButton("☀️ Clima", callback_data="clima"),
@@ -28,290 +106,268 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
         ]
     ]
+    return InlineKeyboardMarkup(keyboard)
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    msg = (
-        "👋 ¡Hola! Soy *Pandito*, tu guía virtual de Mendoza. 🐼\n\n"
-        "Elegí una opción para comenzar:"
+async def enviar_menu_principal(message):
+    await message.reply_text(
+        "👋 ¡Hola! Soy *Pandito*, tu guía virtual de Mendoza. Elegí una opción:",
+        parse_mode="Markdown",
+        reply_markup=build_main_menu()
     )
 
-    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
-    
+async def mostrar_menu_rapido(update_or_query):
+    # update_or_query puede ser Update (con message) o CallbackQuery
+    if hasattr(update_or_query, "message"):
+        target = update_or_query.message
+    else:
+        target = update_or_query
+    keyboard = [[InlineKeyboardButton("🏠 Volver al menú", callback_data="menu_principal")]]
+    await target.reply_text("¿Te puedo ayudar con algo más? 🤔", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def mostrar_menu_rapido_from_query(query):
+    keyboard = [[InlineKeyboardButton("🏠 Volver al menú", callback_data="menu_principal")]]
+    await query.message.reply_text("¿Querés ver otra categoría? 😊", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
 async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Podés preguntarme cosas como:\n"
-        "- Qué lugares visitar en Mendoza\n"
-        "- Qué comer típico\n"
-        "- Cómo está el clima hoy\n"
-        "- Qué puedo hacer en Mendoza un fin de semana"
+        "Podés pedirme recomendaciones, preguntar por clima o pedir itinerarios. Probá tocar los botones del menú."
     )
-    await mostrar_menu_rapido(update)
+    await mostrar_menu_rapido(update.message)
 
+async def lugares_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # comando /lugares -> abre submenú
+    await manejar_botones_fake("lugares", update.message)
 
-
-async def lugares(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🏞️ Algunos lugares imperdibles en Mendoza:\n"
-        "- Parque General San Martín\n"
-        "- Cerro de la Gloria\n"
-        "- Bodegas en Maipú y Luján de Cuyo\n"
-        "- Alta Montaña y Puente del Inca\n"
-        "- Embalse Potrerillos"
-    )
-    
-    await mostrar_menu_rapido(update)
-
-
-
-async def comidas(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🍷 Comidas típicas mendocinas:\n"
-        "- Asado con vino local 🍖\n"
-        "- Empanadas mendocinas 🥟\n"
-        "- Locro y humita\n"
-        "- Dulce de membrillo y tortitas"
-    )
-    
-    await mostrar_menu_rapido(update)
-
-
-
-async def clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    api_key = os.getenv("WEATHER_API_KEY")
-    ciudad = "Mendoza,AR"
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={ciudad}&appid={api_key}&units=metric&lang=es"
-
-    try:
-        response = requests.get(url)
-        data = response.json()
-
-        if data["cod"] == 200:
-            temp = data["main"]["temp"]
-            desc = data["weather"][0]["description"].capitalize()
-
-            mensaje = (
-                f"🌤️ Clima actual en Mendoza:\n"
-                f"Temperatura: {temp}°C\n"
-                f"Descripción: {desc}\n"
-            )
-        else:
-            mensaje = "No pude obtener el clima en este momento 😕"
-
-    except Exception as e:
-        mensaje = f"Error al consultar el clima: {e}"
-
-    await update.message.reply_text(mensaje)
-    
-    await mostrar_menu_rapido(update)
-
-
+# función auxiliar para simular callback desde comandos
+async def manejar_botones_fake(data, message):
+    # Reutilizamos la misma lógica que el callback handler pero con message en lugar de query
+    if data == "lugares":
+        keyboard = [
+            [InlineKeyboardButton("🌿 Naturaleza", callback_data="lug_naturaleza")],
+            [InlineKeyboardButton("🍇 Bodegas", callback_data="lug_bodegas")],
+            [InlineKeyboardButton("🛍 Compras", callback_data="lug_compras")],
+            [InlineKeyboardButton("🏛 Cultura", callback_data="lug_cultura")],
+            [InlineKeyboardButton("⛰ Alta montaña", callback_data="lug_montana")],
+            [InlineKeyboardButton("🎢 Aventura", callback_data="lug_aventura")]
+        ]
+        await message.reply_text("Elegí una categoría de lugares:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def preguntar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         pregunta = " ".join(context.args)
         respuesta = responder_con_ia(pregunta)
         await update.message.reply_text(respuesta)
+        await mostrar_menu_rapido(update.message)
     else:
-        await update.message.reply_text(
-            "Por favor escribí una pregunta. Ejemplo:\n"
-            "`/preguntar Qué puedo visitar en Mendoza en 3 días`",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("Usá: /preguntar <tu pregunta>", parse_mode="Markdown")
 
-#funcion para responder texto 
+# responde texto libre (incluye saludo, menus, búsqueda de lugar)
 async def responder_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pregunta = update.message.text.lower().strip()
-    
-    
-    #saludos que activan el menu principal
-    saludos = ["hola", "buenas", "buen día", "buenas tardes", "buenas noches", "qué tal", "hey", "hi"]
 
-    # Palabras clave para volver al menú principal
-    palabras_menu = ["menu", "menú", "inicio", "volver", "empezar", "principal"]
+    # saludos
+    saludos = ["hola", "buenas", "buen día", "buen dia", "buenas tardes", "buenas noches", "qué tal", "hey", "hi", "holis"]
 
-    # Palabras clave para clima actual
-    palabras_clima = [
-        "tiempo", "frio", "calor", "lluvia", "nieve",
-        "clima", "soleado", "nuboso", "temperatura", "hoy"
-    ]
-    
-    # Palabras clave para pronóstico (a futuro)
-    palabras_pronostico = [
-        "pronóstico", "previsión", "mañana", "tarde", "noche",
-        "tormenta", "semana", "fin de semana", "va a llover", "lloverá"
-    ]
-    
-    
     if any(s in pregunta for s in saludos):
-        # Mostrar menú principal
-        keyboard = [
-            [
-                InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
-                InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
-            ],
-            [
-                InlineKeyboardButton("☀️ Clima", callback_data="clima"),
-                InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
-            ],
-            [
-                InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        await enviar_menu_principal(update.message)
+        return
 
-        saludo_texto = (
-            "¡Hola! 👋 Soy Pandito, tu guía en Mendoza.\n"
-            "¿Qué te gustaría descubrir hoy? 😊"
-        )
+    # detectar si el usuario escribió un lugar que está en JSON
+    clave, info = buscar_lugar_en_json(pregunta)
+    if info:
+        # Formatear respuesta con info del JSON
+        texto = f"📍 *{info.get('nombre', clave.title())}*\n{info.get('descripcion','')}\n\n"
+        if info.get("como_llegar"):
+            texto += f"🚗 *Cómo llegar:* [Abrir en Google Maps]({info['como_llegar']})\n"
 
-        await update.message.reply_text(saludo_texto, reply_markup=reply_markup)
-        return  # 👈 MUY IMPORTANTE: detiene la función aquí
-    
-    
+        if info.get("horarios"):
+            texto += f"🕘 *Horarios:* {info.get('horarios')}\n"
+        if info.get("actividades"):
+            actividades = ', '.join(info.get("actividades"))
+            texto += f"🎯 *Actividades:* {actividades}\n"
+        await update.message.reply_text(texto, parse_mode="Markdown")
+        await mostrar_menu_rapido(update.message)
+        return
 
-    # --- Si el usuario pide volver al menú ---
-    if any(palabra in pregunta for palabra in palabras_menu):
-        keyboard = [
-            [
-                InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
-                InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
-            ],
-            [
-                InlineKeyboardButton("☀️ Clima", callback_data="clima"),
-                InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
-            ],
-            [
-                InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    # palabras clave para clima/pronóstico/menu
+    palabras_menu = ["menu", "menú", "inicio", "volver", "empezar", "principal"]
+    palabras_clima = ["tiempo", "frio", "calor", "lluvia", "nieve", "clima", "temperatura", "hoy"]
+    palabras_pronostico = ["pronóstico", "previsión", "mañana", "tarde", "noche", "va a llover", "lloverá", "tormenta"]
 
-        msg = (
-            "🏠 Volviste al *menú principal*.\n\n"
-            "Elegí una opción para continuar:"
-        )
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
-        return  # corta la función acá
+    if any(p in pregunta for p in palabras_pronostico):
+        await update.message.reply_text(consultar_pronostico())
+        await mostrar_menu_rapido(update.message)
+        return
+    if any(p in pregunta for p in palabras_clima):
+        await update.message.reply_text(consultar_clima())
+        await mostrar_menu_rapido(update.message)
+        return
+    if any(p in pregunta for p in palabras_menu):
+        await enviar_menu_principal(update.message)
+        return
 
-    # --- Si pregunta por el pronóstico ---
-    if any(palabra in pregunta for palabra in palabras_pronostico):
-        respuesta = consultar_pronostico()
-
-    # --- Si pregunta por el clima actual ---
-    elif any(palabra in pregunta for palabra in palabras_clima):
-        respuesta = consultar_clima()
-
-    # --- Si no coincide con nada, responde la IA ---
-    else:
-        respuesta = responder_con_ia(pregunta)
-
+    # Si no encontramos en JSON, pedimos a la IA que describa y aclaramos origen
+    descripcion = enriquecer_con_ia(pregunta)
+    respuesta = f"{descripcion}\n\nNota: esta descripción es orientativa. Para datos exactos consultá fuentes oficiales."
     await update.message.reply_text(respuesta)
-    
-    await mostrar_menu_rapido(update)
+    await mostrar_menu_rapido(update.message)
 
-    
-    
 # --- FUNCIÓN PARA MANEJAR LOS BOTONES INLINE ---
 async def manejar_botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()  # Confirma que se tocó el botón
+    try:
+        await query.answer()
+    except BadRequest:
+        # botón expirado o inválido -> reenviamos menú principal
+        await query.message.reply_text("⏳ Ese botón expiró. Te muestro el menú de nuevo:")
+        await enviar_menu_principal(query.message)
+        return
 
     data = query.data
 
+    # CATEGORÍAS
     if data == "lugares":
-        await query.message.reply_text(
-            "🏞️ Algunos lugares imperdibles en Mendoza:\n"
-            "- Parque General San Martín\n"
-            "- Cerro de la Gloria\n"
-            "- Bodegas en Maipú y Luján de Cuyo\n"
-            "- Alta Montaña y Puente del Inca\n"
-            "- Embalse Potrerillos"
-        )
-
-    elif data == "comidas":
-        await query.message.reply_text(
-            "🍷 Comidas típicas mendocinas:\n"
-            "- Asado con vino local 🍖\n"
-            "- Empanadas mendocinas 🥟\n"
-            "- Locro y humita\n"
-            "- Dulce de membrillo y tortitas"
-        )
-
-    elif data == "clima":
-        respuesta = consultar_clima()
-        await query.message.reply_text(respuesta)
-
-    elif data == "pronostico":
-        respuesta = consultar_pronostico()
-        await query.message.reply_text(respuesta)
-
-    elif data == "ayuda":
-        await query.message.reply_text(
-            "Podés pedirme cosas como:\n"
-            "- Qué lugares visitar en Mendoza\n"
-            "- Qué comer típico\n"
-            "- Cómo está el clima hoy\n"
-            "- Qué bodegas visitar 🍇"
-        )
-
-    # 👇 NUEVO BLOQUE: cuando se toca el botón “Volver al menú”
-    elif data == "menu_principal":
         keyboard = [
-            [
-                InlineKeyboardButton("🏔 Lugares", callback_data="lugares"),
-                InlineKeyboardButton("🍷 Comidas", callback_data="comidas")
-            ],
-            [
-                InlineKeyboardButton("☀️ Clima", callback_data="clima"),
-                InlineKeyboardButton("📅 Pronóstico", callback_data="pronostico")
-            ],
-            [
-                InlineKeyboardButton("ℹ️ Ayuda", callback_data="ayuda")
-            ]
+            [InlineKeyboardButton("🌿 Naturaleza", callback_data="lug_naturaleza")],
+            [InlineKeyboardButton("🍇 Bodegas", callback_data="lug_bodegas")],
+            [InlineKeyboardButton("🛍 Compras", callback_data="lug_compras")],
+            [InlineKeyboardButton("🏛 Cultura", callback_data="lug_cultura")],
+            [InlineKeyboardButton("⛰ Alta montaña", callback_data="lug_montana")],
+            [InlineKeyboardButton("🎢 Aventura", callback_data="lug_aventura")],
+            [InlineKeyboardButton("🏠 Menú principal", callback_data="menu_principal")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.message.reply_text("Elegí una categoría de lugares:", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+   # --- CATEGORÍAS ---
+    if data == "lug_naturaleza":
         await query.message.reply_text(
-            "🏠 Estás de nuevo en el *menú principal*. Elegí una opción:",
-            parse_mode="Markdown",
-            reply_markup=reply_markup
+        "🌿 *Naturaleza en Mendoza:*\n"
+        "- Parque General San Martín\n"
+        "- Reserva Divisadero Largo\n"
+        "- Chacras de Coria\n"
+        "- Lago del Parque Central\n\n"
+        "✏️ *Escribí el nombre del lugar para darte información detallada.*",
+        parse_mode="Markdown"
+    )
+        return
+
+    if data == "lug_bodegas":
+        await query.message.reply_text(
+        "🍇 *Bodegas recomendadas:*\n"
+        "- Catena Zapata\n"
+        "- Zuccardi\n"
+        "- Trapiche\n"
+        "- Norton\n"
+        "- Séptima\n\n"
+        "✏️ *Escribí el nombre de la bodega para darte más información.*",
+        parse_mode="Markdown"
+    )
+        return
+
+
+    if data == "lug_compras":
+        await query.message.reply_text(
+        "🛍 *Compras y paseos:*\n"
+        "- Palmares Open Mall\n"
+        "- Mendoza Plaza Shopping\n"
+        "- Paseo Arístides\n"
+        "- Calle Las Heras\n\n"
+        "✏️ *Escribí el lugar para darte más información.*",
+        parse_mode="Markdown"
+    )
+        return
+
+    if data == "lug_cultura":
+        await query.message.reply_text(
+        "🏛 *Cultura e historia:*\n"
+        "- Museo del Área Fundacional\n"
+        "- Ruinas de San Francisco\n"
+        "- Teatro Independencia\n"
+        "- Plaza Independencia\n\n"
+        "✏️ *Escribí el lugar para darte más información.*",
+        parse_mode="Markdown"
+    )
+        return
+
+    if data == "lug_montana":
+        await query.message.reply_text(
+        "⛰ *Alta montaña:*\n"
+        "- Potrerillos\n"
+        "- Uspallata\n"
+        "- Penitentes\n"
+        "- Puente del Inca\n"
+        "- Mirador del Aconcagua\n\n"
+        "✏️ *Escribí el lugar para darte más información.*",
+        parse_mode="Markdown"
+    )
+        return
+
+    if data == "lug_aventura":
+        await query.message.reply_text(
+        "🎢 *Aventura en Mendoza:*\n"
+        "- Rafting en Potrerillos\n"
+        "- Trekking en Uspallata\n"
+        "- Parapente en Cerro Arco\n"
+        "- Cabalgatas en montaña\n\n"
+        "✏️ *Escribí el lugar para darte más información.*",
+        parse_mode="Markdown"
+    )
+        return
+
+
+    # Otros botones
+
+    if data == "clima":
+        await query.message.reply_text(consultar_clima())
+        return await mostrar_menu_rapido_from_query(query)
+
+    if data == "pronostico":
+        await query.message.reply_text(consultar_pronostico())
+        return await mostrar_menu_rapido_from_query(query)
+
+    if data == "ayuda":
+        await query.message.reply_text(
+            "Podés pedirme cosas como:\n- Qué lugares visitar\n- Qué comer típico\n- Cómo está el clima\n- Recomendaciones de bodegas"
         )
+        return await mostrar_menu_rapido_from_query(query)
 
-    else:
-        await query.message.reply_text("Opción no reconocida, probá otra 🙂")
+    if data == "menu_principal":
+        await enviar_menu_principal(query.message)
+        return
 
+    await query.message.reply_text("Opción no reconocida 🙂")
 
-async def mostrar_menu_rapido(update: Update):
-    keyboard = [
-        [InlineKeyboardButton("🏠 Volver al menú", callback_data="menu_principal")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("¿Te puedo ayudar con algo más? 🤔", reply_markup=reply_markup)
+# --- ERROR HANDLER ---
+async def manejar_errores(update: object, context: ContextTypes.DEFAULT_TYPE):
+    err = context.error
+    print(f"Error capturado en handler: {err}")
+    # no hacemos crash del bot, solo logueamos
+    try:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Ocurrió un error, intentá de nuevo.")
+    except Exception:
+        pass
 
-
-
-# --- CONFIGURACIÓN DEL BOT ---
+# --- CONFIG ---
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Comandos
-    app.add_handler(CommandHandler("start", start))
+   
     app.add_handler(CommandHandler("ayuda", ayuda))
-    app.add_handler(CommandHandler("lugares", lugares))
-    app.add_handler(CommandHandler("comidas", comidas))
-    app.add_handler(CommandHandler("clima", clima))
+    app.add_handler(CommandHandler("lugares", lugares_cmd))
+    app.add_handler(CommandHandler("clima", lambda u, c: u.message.reply_text(consultar_clima())))
     app.add_handler(CommandHandler("preguntar", preguntar))
+
+    # callbacks y mensajes
     app.add_handler(CallbackQueryHandler(manejar_botones))
-    app.add_handler(CallbackQueryHandler(manejar_botones))
-
-
-
-    # Mensajes sin comando → IA
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder_texto))
+
+    # errores
+    app.add_error_handler(manejar_errores)
 
     print("🌍 Guía Mendoza (Pandito) corriendo...")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
